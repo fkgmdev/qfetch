@@ -2,12 +2,14 @@
 use std::{fs::read_to_string, process::Command};
 
 struct Info {
+    os: String,
     ip_addr: String,
     cpu_model: String,
 }
 impl Info {
     fn new() -> Self {
         Self {
+            os: get_os(),
             ip_addr: get_ip_addr(),
             cpu_model: get_cpu_model(),
         }
@@ -30,7 +32,7 @@ fn get_ip_addr() -> String {
         .unwrap()
         .split_whitespace()
         .nth(1)
-        .unwrap() // no need to clear this up either
+        .unwrap()
         .split('/')
         .next()
         .unwrap()
@@ -45,15 +47,31 @@ fn get_cpu_model() -> String {
     output_str
         .lines()
         .find(|line| line.starts_with("Model name"))
-        .unwrap() // guaranteed to be there so no problem using unwrap
-        .split_whitespace()
-        .skip(2)
-        .collect::<Vec<_>>()
-        .join(" ")
+        .and_then(|line| line.split(":").nth(1))
+        .map(str::trim)
+        .unwrap()
         .to_string()
+}
+fn get_os() -> String {
+    let Ok(os_release) = read_to_string("/etc/os-release") else {
+        return String::from("Failed");
+    };
+
+    os_release
+        .lines()
+        .find(|line| line.starts_with("PRETTY_NAME"))
+        .and_then(|line| line.split("=").nth(1))
+        .map(|line| line.trim_matches('"'))
+        .unwrap_or("Linux")
+        .to_string()
+        + " "
+        + std::env::consts::ARCH
 }
 
 fn main() {
     let info = Info::new();
-    println!("Ip: {} Cpu: {}", info.ip_addr, info.cpu_model);
+    println!(
+        "OS: {}\nIp: {}\nCpu: {}",
+        info.os, info.ip_addr, info.cpu_model
+    );
 }
