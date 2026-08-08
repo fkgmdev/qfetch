@@ -1,5 +1,5 @@
 #![allow(unused, clippy::all)]
-use std::process::Command;
+use std::{fs::read_to_string, process::Command};
 
 struct Info {
     ip_addr: String,
@@ -15,10 +15,12 @@ impl Info {
 }
 
 fn get_ip_addr() -> String {
-    let output_str = match Command::new("ip").arg("a").output() {
-        Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
-        Err(_) => String::from("failed"),
-    };
+    let output_raw = Command::new("ip").arg("a").output();
+    let mut output_str = String::new();
+    match output_raw {
+        Ok(output) => output_str = String::from_utf8_lossy(&output.stdout).into_owned(),
+        Err(_) => return String::from("failed"),
+    }
 
     output_str
         .lines()
@@ -29,21 +31,23 @@ fn get_ip_addr() -> String {
         .unwrap()
         .split_whitespace()
         .nth(1)
-        .unwrap()
+        .unwrap() // no need to clear this up either
         .split('/')
         .next()
         .unwrap()
         .to_string()
 }
 fn get_cpu_model() -> String {
-    let output_str = match Command::new("cat").arg("/proc/cpuinfo").output() {
-        Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
-        Err(_) => String::from("failed"),
-    };
+    let output_raw = read_to_string("/proc/cpuinfo");
+    let mut output_str = String::new();
+    match output_raw {
+        Ok(output) => output_str = output,
+        Err(_) => return String::from("failed"),
+    }
     output_str
         .lines()
-        .nth(4)
-        .unwrap()
+        .find(|line| line.starts_with("model name"))
+        .unwrap() // guaranteed to be there so no problem using unwrap
         .split(": ")
         .nth(1)
         .unwrap()
