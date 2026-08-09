@@ -1,10 +1,12 @@
 #![allow(unused, clippy::all)]
-use std::{fs::read_to_string, process::Command};
+use std::{fs::read_to_string, process::Command, time::Duration};
 
 struct Info {
     os: String,
     ip_addr: String,
     cpu_model: String,
+    kernel: String,
+    uptime: i32,
 }
 impl Info {
     fn new() -> Self {
@@ -12,6 +14,8 @@ impl Info {
             os: get_os(),
             ip_addr: get_ip_addr(),
             cpu_model: get_cpu_model(),
+            kernel: get_kernel(),
+            uptime: get_uptime(),
         }
     }
 }
@@ -67,11 +71,38 @@ fn get_os() -> String {
         + " "
         + std::env::consts::ARCH
 }
+fn get_kernel() -> String {
+    match Command::new("uname").arg("-r").output() {
+        Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        Err(e) => format!("Failed: {}", e.to_string()).to_string(),
+    }
+}
+fn get_uptime() -> i32 {
+    let raw_uptime = match read_to_string("/proc/uptime") {
+        Ok(uptime) => uptime
+            .split_whitespace()
+            .nth(0)
+            .and_then(|secs| secs.split('.').nth(0))
+            .unwrap()
+            .to_owned(),
+        Err(e) => return 0,
+    };
+    let total_seconds: i32 = raw_uptime.parse().unwrap();
+    total_seconds
+}
+
+fn format_secs(secs: i32) -> (String, String) {
+    (
+        ((secs / 3600).to_string()),
+        ((secs % 3600) / 60).to_string(),
+    )
+}
 
 fn main() {
     let info = Info::new();
+    let (uptime_hrs, uptime_mins) = format_secs(info.uptime);
     println!(
-        "OS: {}\nIp: {}\nCpu: {}",
-        info.os, info.ip_addr, info.cpu_model
+        "OS: {}\nKernel: {}\nIp: {}\nCpu: {}\n\nUptime: {} hours {} minutes",
+        info.os, info.kernel, info.ip_addr, info.cpu_model, uptime_hrs, uptime_mins
     );
 }
