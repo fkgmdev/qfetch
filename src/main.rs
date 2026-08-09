@@ -7,6 +7,7 @@ struct Info {
     cpu_model: String,
     kernel: String,
     uptime: i32,
+    energy_rate: String,
 }
 impl Info {
     fn new() -> Self {
@@ -16,6 +17,7 @@ impl Info {
             cpu_model: get_cpu_model(),
             kernel: get_kernel(),
             uptime: get_uptime(),
+            energy_rate: get_rate(),
         }
     }
 }
@@ -97,12 +99,29 @@ fn format_secs(secs: i32) -> (String, String) {
         ((secs % 3600) / 60).to_string(),
     )
 }
+fn get_rate() -> String {
+    match Command::new("upower").arg("-d").output() {
+        Ok(output) => String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .find(|line| line.trim().starts_with("energy-rate"))
+            .and_then(|line| line.split(':').nth(1).and_then(|val| Some(val.trim())))
+            .unwrap()
+            .to_string(),
+        Err(e) => format!("Failed: {}", e.to_string()),
+    }
+}
 
 fn main() {
     let info = Info::new();
     let (uptime_hrs, uptime_mins) = format_secs(info.uptime);
     println!(
-        "OS: {}\nKernel: {}\nIp: {}\nCpu: {}\n\nUptime: {} hours {} minutes",
-        info.os, info.kernel, info.ip_addr, info.cpu_model, uptime_hrs, uptime_mins
+        "OS: {}\nKernel: {}\nIp: {}\nCpu: {}\n\nUptime: {} hours {} minutes\nEnergy rate: {}",
+        info.os,
+        info.kernel,
+        info.ip_addr,
+        info.cpu_model,
+        uptime_hrs,
+        uptime_mins,
+        info.energy_rate
     );
 }
