@@ -10,6 +10,7 @@ struct Info {
     kernel: String,
     uptime: i32,
     energy_rate: String,
+    time_left: Option<i32>,
     disks: Option<Vec<Disk>>,
 }
 impl Info {
@@ -21,6 +22,7 @@ impl Info {
             kernel: get_kernel(),
             uptime: get_uptime(),
             energy_rate: get_rate(),
+            time_left: get_remaining_time(),
             disks: get_disks(),
         }
     }
@@ -147,32 +149,22 @@ fn get_disks() -> Option<Vec<Disk>> {
     Some(disks)
 }
 
+fn get_remaining_time() -> Option<i32> {
+    let usage: i32 = match read_to_string("/sys/class/power_supply/BAT1/power_now") {
+        Ok(watts) => watts.trim().parse().unwrap(),
+        Err(_) => return None,
+    };
+    let remaining_bat: i32 = match read_to_string("/sys/class/power_supply/BAT1/energy_now") {
+        Ok(whs) => whs.trim().parse().unwrap(),
+        Err(_) => return None,
+    };
+    let hours: f64 = remaining_bat as f64 / usage as f64;
+    Some((hours * 3600.0) as i32)
+}
 fn main() {
-    // let start = std::time::Instant::now();
     let info = Info::new();
     let (uptime_hrs, uptime_mins) = format_secs(info.uptime);
-    // let disk_str: String = match info.disks {
-    //     Some(disks) => {
-    //         let lines: Vec<String> = disks
-    //             .iter()
-    //             .enumerate()
-    //             .map(|(index, disk)| {
-    //                 format!(
-    //                     "Disk {}: Used: {}/{} ({}) Free: {} Mountpoint: {} Partition: {}",
-    //                     (index + 1).to_string(),
-    //                     disk.used,
-    //                     disk.size,
-    //                     disk.used_percent,
-    //                     disk.avail,
-    //                     disk.mount,
-    //                     disk.partition
-    //                 )
-    //             })
-    //             .collect();
-    //         lines.join("\n")
-    //     }
-    //     None => "Failed disks".to_string(),
-    // };
+    let (remaining_hrs, remaining_mins) = format_secs(info.time_left.unwrap_or(0));
     let prints = vec![
         "OS: ".blue().to_string(),
         info.os,
@@ -194,8 +186,13 @@ fn main() {
         "\n".to_string(),
         "Energy rate: ".blue().to_string(),
         info.energy_rate,
+        "\n".to_string(),
+        "Remaining battery time: ".blue().to_string(),
+        (remaining_hrs.to_string()),
+        " hours ".to_string(),
+        (remaining_mins.to_string()),
+        " minutes".to_string(),
         "\n\n".to_string(),
-        // disk_str.green().to_string(),
     ];
     for thing in prints {
         print!("{}", thing);
@@ -206,15 +203,15 @@ fn main() {
             for (index, disk) in disklist.iter().enumerate() {
                 let diskprints = vec![
                     "Disk ".blue().to_string(),
-                    (index + 1).to_string(),
-                    ": ".green().to_string(),
-                    disk.partition.to_owned(),
+                    (index + 1).to_string().blue().to_string(),
+                    ": ".blue().to_string(),
+                    disk.partition.bright_cyan().to_string(),
                     "\nUsed: ".red().to_string(),
                     disk.used.to_owned(),
                     "/".to_string(),
                     disk.size.to_owned(),
-                    "(".to_string(),
-                    disk.used_percent.to_owned(),
+                    " (".to_string(),
+                    disk.used_percent.yellow().to_string(),
                     ")".to_string(),
                     " | ".to_string(),
                     "Free: ".green().to_string(),
@@ -231,18 +228,4 @@ fn main() {
         }
         None => {}
     }
-    // let print_str = format!(
-    //     "OS: {}\nKernel: {}\nIp: {}\nCpu: {}\n\nUptime: {} hours {} minutes\nEnergy rate: {}\n\n{}",
-    //     info.os,
-    //     info.kernel,
-    //     info.ip_addr,
-    //     info.cpu_model,
-    //     uptime_hrs,
-    //     uptime_mins,
-    //     info.energy_rate,
-    //     disk_str,
-    // );
-    // println!("{}", print_str);
-
-    // println!("{}", start.elapsed().as_millis());
 }
