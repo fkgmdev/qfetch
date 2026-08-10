@@ -1,6 +1,8 @@
 #![allow(unused, clippy::all)]
 use std::{fs::read_to_string, process::Command, time::Duration};
 
+use colored::Colorize;
+
 struct Info {
     os: String,
     ip_addr: String,
@@ -79,7 +81,7 @@ fn get_os() -> String {
 fn get_kernel() -> String {
     match Command::new("uname").arg("-r").output() {
         Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        Err(e) => format!("Failed: {}", e.to_string()).to_string(),
+        Err(e) => format!("Failed: {}", e.to_string()),
     }
 }
 fn get_uptime() -> i32 {
@@ -95,18 +97,15 @@ fn get_uptime() -> i32 {
     let total_seconds: i32 = raw_uptime.parse().unwrap();
     total_seconds
 }
-fn format_secs(secs: i32) -> (String, String) {
-    (
-        ((secs / 3600).to_string()),
-        ((secs % 3600) / 60).to_string(),
-    )
+fn format_secs(secs: i32) -> (i32, i32) {
+    ((secs / 3600), ((secs % 3600) / 60))
 }
 fn get_rate() -> String {
     match Command::new("upower").arg("-d").output() {
         Ok(output) => String::from_utf8_lossy(&output.stdout)
             .lines()
             .find(|line| line.trim().starts_with("energy-rate"))
-            .and_then(|line| line.split(':').nth(1).and_then(|val| Some(val.trim())))
+            .and_then(|line| line.split(':').nth(1).map(str::trim))
             .unwrap()
             .to_string(),
         Err(e) => format!("Failed: {}", e.to_string()),
@@ -149,39 +148,101 @@ fn get_disks() -> Option<Vec<Disk>> {
 }
 
 fn main() {
+    // let start = std::time::Instant::now();
     let info = Info::new();
     let (uptime_hrs, uptime_mins) = format_secs(info.uptime);
-    let disk_str: String = match info.disks {
-        Some(disks) => {
-            let lines: Vec<String> = disks
-                .iter()
-                .enumerate()
-                .map(|(index, disk)| {
-                    format!(
-                        "Disk {}: Used: {}/{} ({}) Free: {} Mountpoint: {} Partition: {}",
-                        (index + 1).to_string(),
-                        disk.used,
-                        disk.size,
-                        disk.used_percent,
-                        disk.avail,
-                        disk.mount,
-                        disk.partition
-                    )
-                })
-                .collect();
-            lines.join("\n")
-        }
-        None => "Failed disks".to_string(),
-    };
-    println!(
-        "OS: {}\nKernel: {}\nIp: {}\nCpu: {}\n\nUptime: {} hours {} minutes\nEnergy rate: {}\n\n{}",
+    // let disk_str: String = match info.disks {
+    //     Some(disks) => {
+    //         let lines: Vec<String> = disks
+    //             .iter()
+    //             .enumerate()
+    //             .map(|(index, disk)| {
+    //                 format!(
+    //                     "Disk {}: Used: {}/{} ({}) Free: {} Mountpoint: {} Partition: {}",
+    //                     (index + 1).to_string(),
+    //                     disk.used,
+    //                     disk.size,
+    //                     disk.used_percent,
+    //                     disk.avail,
+    //                     disk.mount,
+    //                     disk.partition
+    //                 )
+    //             })
+    //             .collect();
+    //         lines.join("\n")
+    //     }
+    //     None => "Failed disks".to_string(),
+    // };
+    let prints = vec![
+        "OS: ".blue().to_string(),
         info.os,
+        "\n".to_string(),
+        "Kernel: ".blue().to_string(),
         info.kernel,
+        "\n".to_string(),
+        "Ip: ".blue().to_string(),
         info.ip_addr,
+        "\n".to_string(),
+        "Cpu: ".blue().to_string(),
         info.cpu_model,
-        uptime_hrs,
-        uptime_mins,
+        "\n".to_string(),
+        "Uptime: ".blue().to_string(),
+        (uptime_hrs.to_string()),
+        " hours ".to_string(),
+        (uptime_mins.to_string()),
+        " minutes".to_string(),
+        "\n".to_string(),
+        "Energy rate: ".blue().to_string(),
         info.energy_rate,
-        disk_str,
-    );
+        "\n\n".to_string(),
+        // disk_str.green().to_string(),
+    ];
+    for thing in prints {
+        print!("{}", thing);
+    }
+
+    match info.disks {
+        Some(disklist) => {
+            for (index, disk) in disklist.iter().enumerate() {
+                let diskprints = vec![
+                    "Disk ".blue().to_string(),
+                    (index + 1).to_string(),
+                    ": ".green().to_string(),
+                    disk.partition.to_owned(),
+                    "\nUsed: ".red().to_string(),
+                    disk.used.to_owned(),
+                    "/".to_string(),
+                    disk.size.to_owned(),
+                    "(".to_string(),
+                    disk.used_percent.to_owned(),
+                    ")".to_string(),
+                    " | ".to_string(),
+                    "Free: ".green().to_string(),
+                    disk.avail.to_owned(),
+                    " | ".to_string(),
+                    "Mountpoint: ".purple().to_string(),
+                    disk.mount.to_owned(),
+                    "\n\n".to_string(),
+                ];
+                for thing in diskprints {
+                    print!("{thing}");
+                }
+            }
+        }
+        None => {}
+    }
+    // let print_str = format!(
+    //     "OS: {}\nKernel: {}\nIp: {}\nCpu: {}\n\nUptime: {} hours {} minutes\nEnergy rate: {}\n\n{}",
+    //     info.os,
+    //     info.kernel,
+    //     info.ip_addr,
+    //     info.cpu_model,
+    //     uptime_hrs,
+    //     uptime_mins,
+    //     info.energy_rate,
+    //     disk_str,
+    // );
+    // println!("{}", print_str);
+
+    // println!("{}", start.elapsed().as_millis());
 }
