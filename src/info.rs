@@ -12,12 +12,29 @@ struct Info {
     time_left: Option<i32>,
     disks: Option<Vec<Disk>>,
 }
+// enum InfoError {
+//     CommandFail(String),
+//     IoError(std::io::Error),
+//     ParseError(String),
+// }
 impl Info {
     fn new() -> Self {
         Self {
-            os: get_os(),
-            ip_addr: get_ip_addr(),
-            cpu_model: get_cpu_model(),
+            os: match get_os() {
+                Ok(Some(os)) => os,
+                Ok(None) => "Linux".to_string(),
+                Err(e) => format!("Failed: {e}"),
+            },
+            ip_addr: match get_ip_addr() {
+                Ok(Some(addr)) => addr,
+                Ok(None) => "None".to_string(),
+                Err(e) => format!("Failed: {e}"),
+            },
+            cpu_model: match get_cpu_model() {
+                Ok(Some(model)) => model,
+                Ok(None) => "None".to_string(),
+                Err(e) => format!("Failed: {e}"),
+            },
             kernel: get_kernel(),
             uptime: get_uptime(),
             energy_rate: get_rate(),
@@ -27,57 +44,40 @@ impl Info {
     }
 }
 
-fn get_ip_addr() -> String {
-    let output_raw = Command::new("ip").arg("a").output();
-    let output_str = match output_raw {
-        Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
-        Err(_) => return String::from("failed"),
-    };
-
-    match output_str.lines().map(str::trim).find(|line| {
-        line.starts_with("inet") && !line.contains("127.0.0.1") && !line.starts_with("inet6")
-    }) {
-        Some(output_line) => {
-            return output_line
-                .split_whitespace()
-                .nth(1)
-                .unwrap()
-                .split('/')
-                .next()
-                .unwrap()
-                .to_string();
-        }
-        None => return "None".to_string(),
-    }
+fn get_ip_addr() -> Result<Option<String>, String> {
+    let output_raw = Command::new("ip")
+        .arg("a")
+        .output()
+        .map_err(|e| e.to_string())?;
+    let output_str = String::from_utf8_lossy(&output_raw.stdout).to_string();
+    Ok(output_str
+        .lines()
+        .map(str::trim)
+        .find(|line| {
+            line.starts_with("inet") && !line.contains("127.0.0.1") && !line.starts_with("inet6")
+        })
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|ip| ip.split("/").next())
+        .map(|ip| ip.to_string()))
 }
-fn get_cpu_model() -> String {
-    let output_raw = Command::new("lscpu").output();
-    let output_str = match output_raw {
-        Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
-        Err(e) => return format!("Failed: {}", e.to_string()),
-    };
-    output_str
+fn get_cpu_model() -> Result<Option<String>, String> {
+    let output_raw = Command::new("lscpu").output().map_err(|e| e.to_string())?;
+    let output_str = String::from_utf8_lossy(&output_raw.stdout).to_string();
+    Ok(output_str
         .lines()
         .find(|line| line.starts_with("Model name"))
         .and_then(|line| line.split(":").nth(1))
         .map(str::trim)
-        .unwrap()
-        .to_string()
+        .map(|s| s.to_string()))
 }
-fn get_os() -> String {
-    let Ok(os_release) = read_to_string("/etc/os-release") else {
-        return String::from("Failed");
-    };
+fn get_os() -> Result<Option<String>, String> {
+    let os_release = read_to_string("/etc/os-release").map_err(|e| e.to_string())?;
 
-    os_release
+    Ok(os_release
         .lines()
         .find(|line| line.starts_with("PRETTY_NAME"))
         .and_then(|line| line.split("=").nth(1))
-        .map(|line| line.trim_matches('"'))
-        .unwrap_or("Linux")
-        .to_string()
-        + " "
-        + std::env::consts::ARCH
+        .map(|line| line.trim_matches('"').to_string() + " " + std::env::consts::ARCH))
 }
 fn get_kernel() -> String {
     match Command::new("uname").arg("-r").output() {
