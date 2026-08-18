@@ -11,6 +11,7 @@ struct Info {
     energy_rate: String,
     time_left: Option<i32>,
     disks: Option<Vec<Disk>>,
+    battery_status: BatteryStatus,
 }
 // enum InfoError {
 //     CommandFail(String),
@@ -40,6 +41,7 @@ impl Info {
             energy_rate: get_rate(),
             time_left: get_remaining_time(),
             disks: get_disks(),
+            battery_status: get_battery_status(),
         }
     }
 }
@@ -160,6 +162,26 @@ fn get_remaining_time() -> Option<i32> {
     let hours: f64 = remaining_bat as f64 / usage as f64;
     Some((hours * 3600.0) as i32)
 }
+#[derive(PartialEq)]
+enum BatteryStatus {
+    Charging,
+    Discharging,
+    Limbo,
+}
+fn get_battery_status() -> BatteryStatus {
+    match read_to_string("/sys/class/power_supply/BAT1/status") {
+        Ok(status) => {
+            if status.trim() == "Discharging" {
+                BatteryStatus::Discharging
+            } else if status.trim() == "Charging" {
+                BatteryStatus::Charging
+            } else {
+                BatteryStatus::Limbo
+            }
+        }
+        Err(_) => BatteryStatus::Limbo,
+    }
+}
 
 pub fn fetch() -> Vec<(String, String)> {
     let info = Info::new();
@@ -174,12 +196,14 @@ pub fn fetch() -> Vec<(String, String)> {
             "Uptime: ".blue().to_string(),
             format!("{} hours {} minutes", uptime_hrs, uptime_mins),
         ),
-        ("Energy rate: ".blue().to_string(), info.energy_rate),
-        (
+    ];
+    if info.battery_status == BatteryStatus::Discharging {
+        out.push(("Energy rate: ".blue().to_string(), info.energy_rate));
+        out.push((
             "Time left: ".blue().to_string(),
             format!("{} hours {} minutes", remaining_hrs, remaining_mins),
-        ),
-    ];
+        ));
+    }
     if let Some(disks) = info.disks {
         for (index, disk) in disks.iter().enumerate() {
             let diskprints = (
