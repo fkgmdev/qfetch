@@ -197,7 +197,7 @@ pub fn fetch() -> Vec<(String, String)> {
             format!("{} hours {} minutes", uptime_hrs, uptime_mins),
         ),
     ];
-    if info.battery_status == BatteryStatus::Discharging {
+    if info.battery_status == BatteryStatus::Discharging && info.energy_rate != "0 W" {
         out.push(("Energy rate: ".blue().to_string(), info.energy_rate));
         out.push((
             "Time left: ".blue().to_string(),
